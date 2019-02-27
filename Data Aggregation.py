@@ -16,15 +16,14 @@ a summarized and meaningful dataset.
 
 '''
 
-
 # Insert date and month of the required raw data daily file.
 date = "2018-12-31"
 month = date[0:7] 
 # Directory that raw data is saved.
-directory_from = 'C:\Users\warren'
+directory_from = ''
 # Directory that processes data will be daved.
-directory_to = 'G:\My Drive'
-dataSet = 'G:\My Drive\DataSet2018-12.csv'
+directory_to = ''
+dataSet = 'G:\My Drive\DataSet.csv'
 
 # Cancels error message
 pd.options.mode.chained_assignment = None
@@ -58,6 +57,8 @@ def process_raw_files():
             g = os.path.basename(os.path.splitext(f)[0])
             all_data = pd.read_csv(f, index_col=0)
             all_data.index = pd.to_datetime(all_data.index)
+
+            # Add various parameters based on raw data
             all_data['Hour'] = all_data.index.hour + 1 
             all_data['Lights'] = 0 
             all_data['Lights'][(all_data['Output Power, (W)'] > 0.6) & (all_data['Output Power, (W)'] < 3.9)] = 1  #12
@@ -72,12 +73,15 @@ def process_raw_files():
             all_data['Battery Temperature, C'] = all_data.groupby('Hour')['Battery Temperature, (degC)'].transform('mean').fillna(0)
             all_data['Battery Voltage, V (Avg)'] = all_data.groupby('Hour')['Battery Voltage, (V)'].transform('mean').fillna(0)
 
+            # Add time the battery was fully charged
             idx = (all_data['Battery Voltage, (V)'] >= 14.0).idxmax()
             all_data['Time of FC'] = np.where(all_data.index == idx, idx.strftime('%H%M'), '')
             all_data['Time of Full Charge'] = all_data.groupby('Hour')['Time of FC'].transform('max')
 
             df2 = all_data.iloc[59::60,[11,7,16,15,13,18,19,17,20,10,21,23]]
             
+
+            # Calculate Energy output, and split between Lights and Lights+Media
             df2['Output Energy, (Wh/h)'] = df2['Output Energy, (Wh)'].diff().fillna(df2['Output Energy, (Wh)'])
             df2['Minutes_Light_/h'] = df2['Minutes_of_lights'].diff().fillna(df2['Minutes_of_lights'])
             df2['Minutes_Light+Media_/h'] = df2['Minutes_of_Lights+Media'].diff().fillna(df2['Minutes_of_Lights+Media'])
@@ -94,6 +98,7 @@ def process_raw_files():
             df3 = df2.iloc[:,[0,12,15,16,19,17,18,5,6,10,7,8,20,11]]
             df3 = df3.set_index('Hour')
 
+            # Add a 'Total/Max/Min' column that summarizes data
             df3.columns = pd.MultiIndex.from_arrays([[g] * len(df3.columns),df3.columns], names=(None,None))            
             df3 = df3.round(decimals=3)
             df3 = df3.T
@@ -105,6 +110,7 @@ def process_raw_files():
             mask2 = df3.index.get_level_values(1) == 'Battery Voltage, V (Min)'
             df3['Total/Max/Min'] = np.where(mask1, df3.max(axis=1),np.where(mask2, df3.min(axis=1),np.where(mask3, df3.mean(axis=1), df3.sum(axis=1))))
      
+            # Save as a CSV file.
             filename = 'Aggregated-{}'.format(g)
             file_csv = '{}.csv'.format(filename)
             try:
